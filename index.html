@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+</head>
+
+<body>
+  <div id="app">
+    <v-app>
+      <v-main>
+        <v-app-bar color="blue" dark app height="60">
+          <div style="max-width: 800px">
+            InfWiki
+          </div>
+        </v-app-bar>
+        <v-container style="max-width: 800px" class="pt-10">
+          <v-row>
+            <v-col class="d-fix" cols="12">
+              <h3> 無限にWikipediaがランダムスクロールされるよ。 </h3>
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col cols="12" v-for="item in items">
+              <v-card>
+                <div class="d-flex flex-no-wrap justify-space-between">
+                  <div>
+                    <v-card-title>{{item.title}}</v-card-title>
+                    <v-card-subtitle>{{item.description}}</v-card-subtitle>
+                    <v-card-actions>
+                      <v-btn outlined rounded color="blue" @click="openBottomSheet(item.pageId)">
+                        詳細 <v-icon>dock-window</v-icon>
+                      </v-btn>
+                    </v-card-actions>
+                  </div>
+                  <v-avatar class="ma-3" size="125" tile>
+                    <v-img :src="item.image_src"></v-img>
+                  </v-avatar>
+                </div>
+              </v-card>
+            </v-col>
+          </v-row>
+          <div v-intersect="onIntersect">
+            続きを読み込んでいます…
+          </div>
+        </v-container>
+        <v-bottom-sheet v-model="isShownSheet">
+          <v-sheet height="90vh" style="overflow-y: scroll; white-space: pre-line;">
+            <v-container>
+              <h3>{{pageTitle}}</h3>
+              {{pageText}}
+            </v-container>
+          </v-sheet>
+        </v-bottom-sheet>
+      </v-main>
+    </v-app>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      vuetify: new Vuetify(),
+      data: ()=>{
+        return {
+          items: [],
+          isShownSheet: false,
+          pageTitle: "",
+          pageText: ""
+        }
+      },
+      methods: {
+        fetchRandomWikipedia(){
+          var parameters = {
+            // #共通パラメータ
+            "action": "query",
+            "format": "json",
+            // #generatorパラメータ
+            "generator": "random",
+            "grnlimit": "10",
+            "grnnamespace": "0",
+            // #記事取得本体パラメータ
+            "prop": "extracts|images|pageimages",
+            "exintro": true,
+            "explaintext": true,
+            "exsectionformat": "plain",
+          }
+          return this.fetchWikipedia(parameters)
+        },
+        wikipediaPagesToItems(pages){
+          return Object.keys(pages).map((pageId)=>{
+            const page = pages[pageId]
+            const image_src = this.pageToImagesrc(page)
+            const description = page.extract?.length > 200 ? page.extract.substring(0, 200)+"……" : page.extract
+            return {
+              pageId: pageId,
+              title: page.title,
+              description: description,
+              image_src: image_src,
+            }
+          })
+        },
+        pageToImagesrc(page){
+          if (page.images){
+            const fileName = page.images[0].title.replace(/^ファイル:/, "")
+            return "https://en.wikipedia.org/w/index.php?title=Special:Redirect/file&wpvalue=" + fileName
+          } else {
+            return "noimage-760x460.png"
+          }
+        },
+        openBottomSheet(pageId){
+          this.isShownSheet = true
+          const response = this.getPageContent(pageId)
+          const pages = response.query.pages
+          const page =pages[Object.keys(pages)[0]]
+          this.pageText = page.extract
+          this.pageTitle = page.title
+        },
+        getPageContent(pageId){
+          const parameters = {
+            "action": "query",
+            "format": "json",
+            "prop": "extracts",
+            "explaintext": true,
+            "exsectionformat": "plain",
+            "pageids": pageId
+          }
+          return this.fetchWikipedia(parameters)
+        },
+        fetchWikipedia(parameters){
+          parameters.origin = "*"
+          var xmlHttp = new XMLHttpRequest();
+          var parameterStr = new URLSearchParams(parameters).toString();
+          xmlHttp.open("GET", "https://ja.wikipedia.org/w/api.php?" + parameterStr, false); // false for synchronous request
+          xmlHttp.send(null);
+          return JSON.parse(xmlHttp.responseText);
+
+        },
+        onIntersect(){
+          console.log("ああ")
+          var response = this.fetchRandomWikipedia()
+          addedItems = this.wikipediaPagesToItems(response.query.pages)
+          this.items.push(...addedItems)
+        }
+      },
+      mounted () {
+        console.log("mounted")
+        var response = this.fetchRandomWikipedia()
+        this.items = this.wikipediaPagesToItems(response.query.pages)
+        console.log(response);
+        console.log(Object.keys(response));
+      },
+    })
+  </script>
+</body>
+
+</html>
