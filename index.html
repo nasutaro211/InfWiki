@@ -47,11 +47,18 @@
             続きを読み込んでいます…
           </div>
         </v-container>
-        <v-bottom-sheet v-model="isShownSheet">
-          <v-sheet height="90vh" style="overflow-y: scroll; white-space: pre-line;">
+        <v-bottom-sheet v-if="isShownSheet" v-model="isShownSheet">
+          <v-sheet height="90vh" style="overflow-y: scroll;">
             <v-container>
-              <h3>{{pageTitle}}</h3>
-              {{pageText}}
+              <!-- 読み込み前 -->
+              <div v-if="isLoadingPage">
+                <v-progress-circular indeterminate color="blue"></v-progress-circular>
+              </div>
+              <!-- 読み込み後 -->
+              <div v-else>
+                <h3 class="my-3">{{pageTitle}}</h3>
+                <p style="white-space: pre-line; line-height: 1.5;">{{pageText}}</p>
+              </div>
             </v-container>
           </v-sheet>
         </v-bottom-sheet>
@@ -69,12 +76,42 @@
         return {
           items: [],
           isShownSheet: false,
+          isLoadingPage: false,
           pageTitle: "",
           pageText: ""
         }
       },
       methods: {
-        fetchRandomWikipedia(){
+        // タイミングで処理系
+        openBottomSheet(pageId) {
+          this.isShownSheet = true
+          this.updateSheetPage(pageId)
+        },
+        onIntersect() {
+          this.updateItems()
+        },
+        // データ更新系
+        updateItems(){
+          this.fetchRandomWikipedia((event) => {
+            const response = JSON.parse(event.currentTarget.response)
+            addedItems = this.wikipediaPagesToItems(response.query.pages)
+            this.items.push(...addedItems)
+          })
+        },
+        updateSheetPage(pageId){
+          this.isLoadingPage = true
+          this.fetchPageContent(pageId, (event) => {
+            const response = JSON.parse(event.currentTarget.response)
+            console.log(response)
+            const pages = response.query.pages
+            const page = pages[Object.keys(pages)[0]]
+            this.pageText = page.extract
+            this.pageTitle = page.title
+            this.isLoadingPage = false
+          })
+        },
+        // Wkipedia持ってくる系
+        fetchRandomWikipedia(callback){
           var parameters = {
             // #共通パラメータ
             "action": "query",
@@ -89,8 +126,28 @@
             "explaintext": true,
             "exsectionformat": "plain",
           }
-          return this.fetchWikipedia(parameters)
+          this.fetchWikipedia(parameters, callback)
         },
+        fetchPageContent(pageId, callback) {
+          const parameters = {
+            "action": "query",
+            "format": "json",
+            "prop": "text|extracts",
+            "explaintext": true,
+            "exsectionformat": "plain",
+            "pageids": pageId
+          }
+          this.fetchWikipedia(parameters, callback)
+        },
+        fetchWikipedia(parameters, callback) {
+          parameters.origin = "*"
+          var xmlHttp = new XMLHttpRequest();
+          var parameterStr = new URLSearchParams(parameters).toString();
+          xmlHttp.onloadend = callback
+          xmlHttp.open("GET", "https://ja.wikipedia.org/w/api.php?" + parameterStr); // false for synchronous request
+          xmlHttp.send(null);
+        },
+        // データ変形系
         wikipediaPagesToItems(pages){
           return Object.keys(pages).map((pageId)=>{
             const page = pages[pageId]
@@ -106,53 +163,15 @@
         },
         pageToImagesrc(page){
           if (page.images){
-            const fileName = page.images[0].title.replace(/^ファイル:/, "")
+            const fileName = page.images[page.images.length-1].title.replace(/^ファイル:/, "")
             return "https://en.wikipedia.org/w/index.php?title=Special:Redirect/file&wpvalue=" + fileName
           } else {
             return "noimage-760x460.png"
           }
         },
-        openBottomSheet(pageId){
-          this.isShownSheet = true
-          const response = this.getPageContent(pageId)
-          const pages = response.query.pages
-          const page =pages[Object.keys(pages)[0]]
-          this.pageText = page.extract
-          this.pageTitle = page.title
-        },
-        getPageContent(pageId){
-          const parameters = {
-            "action": "query",
-            "format": "json",
-            "prop": "extracts",
-            "explaintext": true,
-            "exsectionformat": "plain",
-            "pageids": pageId
-          }
-          return this.fetchWikipedia(parameters)
-        },
-        fetchWikipedia(parameters){
-          parameters.origin = "*"
-          var xmlHttp = new XMLHttpRequest();
-          var parameterStr = new URLSearchParams(parameters).toString();
-          xmlHttp.open("GET", "https://ja.wikipedia.org/w/api.php?" + parameterStr, false); // false for synchronous request
-          xmlHttp.send(null);
-          return JSON.parse(xmlHttp.responseText);
-
-        },
-        onIntersect(){
-          console.log("ああ")
-          var response = this.fetchRandomWikipedia()
-          addedItems = this.wikipediaPagesToItems(response.query.pages)
-          this.items.push(...addedItems)
-        }
       },
       mounted () {
-        console.log("mounted")
-        var response = this.fetchRandomWikipedia()
-        this.items = this.wikipediaPagesToItems(response.query.pages)
-        console.log(response);
-        console.log(Object.keys(response));
+        this.updateItems()
       },
     })
   </script>
