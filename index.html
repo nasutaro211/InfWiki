@@ -77,6 +77,7 @@
           items: [],
           isShownSheet: false,
           isLoadingPage: false,
+          isLoadingItems: false,
           pageTitle: "",
           pageText: ""
         }
@@ -88,21 +89,24 @@
           this.updateSheetPage(pageId)
         },
         onIntersect() {
-          this.updateItems()
+          if (this.isLoadingItems==false){
+            this.updateItems()
+          }
         },
         // データ更新系
         updateItems(){
+          this.isLoadingItems = true
           this.fetchRandomWikipedia((event) => {
             const response = JSON.parse(event.currentTarget.response)
             addedItems = this.wikipediaPagesToItems(response.query.pages)
             this.items.push(...addedItems)
+            this.isLoadingItems = false
           })
         },
         updateSheetPage(pageId){
           this.isLoadingPage = true
           this.fetchPageContent(pageId, (event) => {
             const response = JSON.parse(event.currentTarget.response)
-            console.log(response)
             const pages = response.query.pages
             const page = pages[Object.keys(pages)[0]]
             this.pageText = page.extract
@@ -171,7 +175,6 @@
         },
       },
       mounted () {
-        this.updateItems()
       },
     })
   </script>
